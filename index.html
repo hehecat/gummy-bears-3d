@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Gummy Bears · 软糖熊</title>
+<script>
+window.__errs = [];
+window.__phase = 'boot';
+addEventListener('error', function (e) {
+  window.__errs.push('E: ' + e.message + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno + ':' + e.colno + (e.error && e.error.stack ? ' | ' + e.error.stack : '') + ' | phase=' + window.__phase);
+});
+addEventListener('unhandledrejection', function (e) { window.__errs.push('R: ' + e.reason + ' | phase=' + window.__phase); });
+/* 无头测试用：?norender=1 → 冻结渲染循环（软件渲染下截图/驱动用） */
+if (new URLSearchParams(location.search).has('norender')) { window.__noRender = true; window.__pause = true; }
+if (new URLSearchParams(location.search).has('selftest')) {
+  setInterval(function () {
+    if (window.__selftest) return;
+    document.title = 'D phase=' + window.__phase + ' canvas=' + document.querySelectorAll('canvas').length +
+      ' bears=' + (window.__gummy ? window.__gummy.bears : '-') + ' mem=' + JSON.stringify(window.__gummy ? window.__gummy.mem : null) +
+      ' errs=' + JSON.stringify((window.__errs || []).slice(0, 6)) +
+      ' T=' + JSON.stringify(window.__selftest || null);
+  }, 250);
+}
+</script>
+<style>
+  :root{--ink:#242a35;--ink2:#8b93a3;}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;background:#fff;color:var(--ink);
+    font:400 13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block;width:100%;height:100%;touch-action:none;cursor:none}
+
+  /* 极淡的影棚晕影 */
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(125% 95% at 50% 40%,rgba(0,0,0,0) 52%,rgba(28,36,52,.055) 100%)}
+
+  /* 圆点光标 */
+  #cur{position:fixed;left:-100px;top:-100px;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
+    border:1.5px solid rgba(36,42,53,.40);pointer-events:none;z-index:20;transform:scale(1);
+    transition:transform .19s cubic-bezier(.22,1,.36,1),border-color .19s,background-color .19s,box-shadow .19s,opacity .3s;
+    will-change:transform,left,top}
+  #cur.hover{transform:scale(1.55);border-color:rgba(36,42,53,.5)}
+  #cur.grab{transform:scale(2.05);border-color:rgba(255,255,255,.95);background:rgba(255,255,255,.4);
+    box-shadow:0 3px 16px rgba(30,40,60,.16),inset 0 0 0 1px rgba(255,255,255,.5)}
+  #cur.squeeze{transform:scale(2.45)}
+  #cur::after{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;
+    background:rgba(36,42,53,.30);transition:background-color .19s}
+  #cur.grab::after{background:rgba(36,42,53,.22)}
+
+  /* 卡片 */
+  #card{position:fixed;left:22px;bottom:22px;z-index:15;width:248px;padding:13px 15px 12px;border-radius:18px;
+    background:rgba(255,255,255,.64);backdrop-filter:blur(18px) saturate(1.7);-webkit-backdrop-filter:blur(18px) saturate(1.7);
+    border:1px solid rgba(255,255,255,.85);box-shadow:0 14px 36px rgba(28,36,52,.10),0 2px 6px rgba(28,36,52,.05);
+    animation:rise .75s .12s cubic-bezier(.22,1,.36,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:10px}
+  .hd .t{font-weight:600;font-size:14.5px;letter-spacing:.01em}
+  .hd .e{font-size:9.5px;color:var(--ink2);letter-spacing:.14em;text-transform:uppercase}
+  .hd .n{margin-left:auto;font-size:11px;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .row{display:flex;align-items:center;gap:10px;margin:10px 0}
+  .lb{font-size:11px;color:var(--ink2);flex:none;width:28px}
+  .sw{display:flex;gap:7px}
+  .sw i{width:15px;height:15px;border-radius:50%;display:block;cursor:pointer;
+    box-shadow:inset 0 -2px 4px rgba(0,0,0,.10),0 1px 3px rgba(0,0,0,.14);
+    transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s}
+  .sw i:hover{transform:scale(1.2)}
+  .sw i.on{box-shadow:inset 0 -2px 4px rgba(0,0,0,.13),0 0 0 2.2px #fff,0 0 0 4px currentColor}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:3px;flex:1;margin:0;
+    background:linear-gradient(90deg,#c6ccd8,#e8ecf1);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 4px rgba(28,36,52,.28),0 0 0 1px rgba(28,36,52,.06);transition:transform .12s}
+  input[type=range]::-webkit-slider-thumb:active{transform:scale(1.15)}
+  .val{font-size:11px;color:var(--ink2);width:24px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+  .stats{display:flex;gap:10px;margin:12px 0 11px;padding-top:10px;border-top:1px solid rgba(36,42,53,.07)}
+  .stats>div{flex:1;min-width:0}
+  .stats .k{display:block;font-size:9.5px;color:var(--ink2);letter-spacing:.05em;margin-bottom:2px}
+  .stats .v{font-size:15.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  button{width:100%;padding:9px 0;border:0;border-radius:12px;font:inherit;font-size:12.5px;font-weight:600;color:#fff;
+    background:linear-gradient(180deg,#ff8296,#ff5470);cursor:pointer;letter-spacing:.04em;
+    box-shadow:0 4px 12px rgba(255,84,112,.30),inset 0 1px 0 rgba(255,255,255,.35);
+    transition:transform .15s cubic-bezier(.22,1,.36,1),box-shadow .15s,filter .15s}
+  button:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(255,84,112,.36),inset 0 1px 0 rgba(255,255,255,.42)}
+  button:active{transform:translateY(0) scale(.985);filter:brightness(.97)}
+  .tip{margin-top:9px;font-size:10.5px;color:var(--ink2);text-align:center}
+  #dbg{position:fixed;right:14px;top:12px;z-index:15;font:11px/1.5 ui-monospace,Menlo,monospace;color:#94a0b4;
+    text-align:right;display:none;white-space:pre}
+</style>
+</head>
+<body>
+<div id="vig"></div>
+<div id="cur"></div>
+<div id="card">
+  <div class="hd"><span class="t">软糖熊</span><span class="e">Gummy Bears</span><span class="n" id="cnt">—</span></div>
+  <div class="row"><span class="lb">口味</span><div class="sw" id="sw"></div></div>
+  <div class="row"><span class="lb">摇摆</span><input id="wob" type="range" min="0" max="100" value="58"><span class="val" id="wobV">58</span></div>
+  <div class="stats">
+    <div><span class="k">拉伸 stretch</span><span class="v" id="sStr">100%</span></div>
+    <div><span class="k">弹跳 · m/s</span><span class="v" id="sBnc">0.0</span></div>
+  </div>
+  <button id="pour">倾倒更多熊</button>
+  <div class="tip">拖动抓住 · Shift 挤压 · 松开抛出</div>
+</div>
+<div id="dbg"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+window.__phase = 'imports-ok';
+window.__errs = [];
+addEventListener('error', e => { window.__errs.push((e.message || e.error) + ' @' + (e.lineno || (e.error && e.error.stack || ''))); document.title = 'ERR ' + window.__errs.length + ': ' + (e.message || e.error); });
+addEventListener('unhandledrejection', e => { window.__errs.push('REJ ' + e.reason); document.title = 'REJ: ' + e.reason; });
+
+/* =====================================================================
+   0. 可调参数
+   ===================================================================== */
+const RES         = 30;        // metaball 网格分辨率
+const MAX_BEARS   = 12;        // 同时存在的最大熊数
+const TGT_H       = 0.66;      // 熊的世界高度（单位）
+const MARGIN      = 0.84;      // 节点允许占用的 metaball 盒半径（local [-1,1]）
+const SUBTRACT    = 60;        // metaball 衰减
+const ISOLATION   = 80;        // 等值面
+const FIELD_K     = SUBTRACT + ISOLATION;
+const GRAV        = 11.0;      // 重力
+const H_STEP      = 1 / 120;   // 物理固定步长
+const ITER        = 2;         // 约束迭代次数/子步
+const SQ_Y        = 0.50;      // 挤压时纵向压缩比
+const SQ_XZ       = 1.12;      // 挤压时横向扩张比
+const SHADOW_VSM  = true;      // 真→VSM 更柔; 假→PCFSoft
+const DEV         = new URLSearchParams(location.search).has('debug');
+
+/* =====================================================================
+   1. 渲染器 / 场景 / 相机 / 灯光
+   ===================================================================== */
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.06;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = SHADOW_VSM ? THREE.VSMShadowMap : THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.fog = new THREE.Fog(0xffffff, 6.0, 16.0);
+
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 80);
+const CAM_HOME = new THREE.Vector3(0, 1.12, 1.72);
+const CAM_TGT  = new THREE.Vector3(0, 0.34, 0);
+camera.position.copy(CAM_HOME);
+camera.lookAt(CAM_TGT);
+
+// 环境反射（柔和影棚）
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envRT = pmrem.fromScene(new RoomEnvironment(renderer), 0.045);
+scene.environment = envRT.texture;
+pmrem.dispose();
+
+// 光：柔主光 + 背光 + 半球补光
+const key = new THREE.DirectionalLight(0xfff6ee, 2.35);
+key.position.set(-1.40, 4.10, 1.60);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.near = 1.0;
+key.shadow.camera.far  = 12.0;
+const SD = 2.6;
+key.shadow.camera.left = -SD; key.shadow.camera.right = SD;
+key.shadow.camera.top  =  SD; key.shadow.camera.bottom = -SD;
+if (SHADOW_VSM) { key.shadow.radius = 5.0; key.shadow.blurSamples = 12; key.shadow.bias = -0.0004; }
+else            { key.shadow.bias = -0.0012; key.shadow.normalBias = 0.02; }
+scene.add(key);
+scene.add(key.target);
+
+const rim = new THREE.DirectionalLight(0xeaf2ff, 1.15);
+rim.position.set(2.9, 1.9, -2.7);
+scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xe9eef4, 0.30));
+
+// 白色桌子
+const table = new THREE.Mesh(
+  new THREE.PlaneGeometry(80, 80),
+  new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.60, metalness: 0.0, clearcoat: 0.22, clearcoatRoughness: 0.55 })
+);
+table.rotation.x = -Math.PI / 2;
+table.receiveShadow = true;
+scene.add(table);
+
+/* =====================================================================
+   2. 口味
+   ===================================================================== */
+const FLAVORS = [
+  { id: 'strawberry', name: '草莓', c: 0xff2f52 },
+  { id: 'orange',     name: '橙子', c: 0xff8c14 },
+  { id: 'lemon',      name: '柠檬', c: 0xffcc0a },
+  { id: 'lime',       name: '青柠', c: 0x4fd63c },
+  { id: 'blueberry',  name: '蓝莓', c: 0x2f8bff },
+  { id: 'grape',      name: '葡萄', c: 0x9b4dff },
+];
+const matCache = new Map();
+function jellyMaterial(flavor) {
+  if (matCache.has(flavor.id)) return matCache.get(flavor.id);
+  const base = new THREE.Color(flavor.c);
+  const tint = base.clone().lerp(new THREE.Color(0xffffff), 0.16);
+  const m = new THREE.MeshPhysicalMaterial({
+    color: tint,
+    roughness: 0.11,
+    metalness: 0.0,
+    transmission: 0.94,
+    thickness: 0.62,
+    ior: 1.42,
+    attenuationColor: base.clone(),
+    attenuationDistance: 0.22,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.20,
+    envMapIntensity: 1.25,
+    specularIntensity: 1.0,
+  });
+  matCache.set(flavor.id, m);
+  return m;
+}
+
+/* =====================================================================
+   3. 软糖熊：节点 + 距离约束 + metaball 渲染
+   ===================================================================== */
+// 参考姿态（layout 单位, y 向上, 脚在下）
+const LAYOUT = [
+  [-0.35, 1.44, -0.03, 0.23], // 0 左耳
+  [ 0.35, 1.44, -0.03, 0.23], // 1 右耳
+  [ 0.00, 1.12,  0.03, 0.38], // 2 头
+  [ 0.00, 0.96,  0.30, 0.17], // 3 鼻
+  [ 0.00, 0.68,  0.06, 0.44], // 4 胸
+  [ 0.00, 0.26,  0.07, 0.47], // 5 腹
+  [ 0.00,-0.16,  0.00, 0.40], // 6 臀
+  [-0.58, 0.60,  0.02, 0.24], // 7 左手
+  [ 0.58, 0.60,  0.02, 0.24], // 8 右手
+  [-0.24,-0.58,  0.04, 0.26], // 9 左脚
+  [ 0.24,-0.58,  0.04, 0.26], // 10 右脚
+];
+const NN = LAYOUT.length;
+
+// 预计算：质心归一化 + 参考长度
+const _rest = (() => {
+  let mw = 0, cx = 0, cy = 0, cz = 0;
+  for (const [, , , r] of LAYOUT) { const m = r * r * r; mw += m; }
+  for (const [x, y, z, r] of LAYOUT) { const m = r * r * r / mw; cx += x * m; cy += y * m; cz += z * m; }
+  let ext = 0;
+  for (const [x, y, z, r] of LAYOUT) ext = Math.max(ext, Math.hypot(x - cx, y - cy, z - cz) + r);
+  const K = ext / MARGIN;
+  const lx2 = LAYOUT.map(([x, y, z, r]) => [(x - cx) / K, (y - cy) / K, (z - cz) / K, r / K]);
+  let yTop = -1e9, yBot = 1e9;
+  for (const [, y, , r] of lx2) { yTop = Math.max(yTop, y + r); yBot = Math.min(yBot, y - r); }
+  return { nodes: lx2, S0: TGT_H / (yTop - yBot) };
+})();
+const PAIRS = (() => {
+  const out = [];
+  for (let i = 0; i < NN; i++) for (let j = i + 1; j < NN; j++) out.push([i, j]);
+  return out;
+})();
+
+let wobble = 0.58;
+let uid = 0;
+
+class Bear {
+  constructor(flavor, center, rotY, opts = {}) {
+    this.id = ++uid;
+    this.flavor = flavor;
+    this.mat = jellyMaterial(flavor);
+    this.mc = new MarchingCubes(RES, this.mat, false, false, 26000);
+    this.mc.castShadow = true;
+    this.mc.receiveShadow = false;
+    scene.add(this.mc);
+
+    this.S0 = _rest.S0;
+    this.S = this.S0;
+    this.squeeze = 0;
+    this.squeezeT = 0;
+    this.dead = false;
+    this.death = 1;
+    this.sleeping = false;
+    this.still = 0;
+    this.peakStretch = 1;
+    this.peakSpeed = 0;
+
+    const c = Math.cos(rotY), s = Math.sin(rotY);
+    this.nodes = _rest.nodes.map(([x, y, z, r], i) => {
+      const wx = x * c + z * s, wz = -x * s + z * c;
+      const rr = r * this.S0;
+      const px = center.x + wx * this.S0 + (opts.jx || 0) * (Math.random() - .5);
+      const py = center.y + y * this.S0 + (opts.jy || 0) * (Math.random() - .5);
+      const pz = center.z + wz * this.S0 + (opts.jz || 0) * (Math.random() - .5);
+      return {
+        p: new THREE.Vector3(px, py, pz),
+        pp: new THREE.Vector3(px, py, pz),
+        r0: rr, r: rr,
+        invMass: 1 / Math.max(1e-4, rr * rr * rr), invMass0: 0,
+        pin: false, idx: i
+      };
+    });
+    // 质量归一：invMass 太大的小节点会主导，这里统一缩放
+    let mMin = Infinity;
+    for (const n of this.nodes) mMin = Math.min(mMin, n.invMass);
+    for (const n of this.nodes) { n.invMass = n.invMass / mMin; n.invMass0 = n.invMass; }
+
+    this.cons = PAIRS.map(([a, b]) => {
+      const A = this.nodes[a], B = this.nodes[b];
+      const dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, dz = B.p.z - A.p.z;
+      const d = Math.hypot(dx, dy, dz) || 1e-4;
+      const sq = Math.hypot(dx * SQ_XZ, dy * SQ_Y, dz * SQ_XZ);
+      return { a, b, rest0: d, restSq: sq, rest: d };
+    });
+
+    // 初始落下
+    if (opts.vel) for (const n of this.nodes) { n.pp.x -= opts.vel.x * H_STEP; n.pp.y -= opts.vel.y * H_STEP; n.pp.z -= opts.vel.z * H_STEP; }
+
+    this.center = new THREE.Vector3();
+    this.computeCenter();
+    this.mc.position.copy(this.center);
+    this.mc.scale.setScalar(this.S);
+    this.updateField();
+  }
+
+  /* --- 质心（质量加权） --- */
+  computeCenter() {
+    let mw = 0; const v = this.center; v.set(0, 0, 0);
+    for (const n of this.nodes) { const m = n.r0 * n.r0 * n.r0; mw += m; v.x += n.p.x * m; v.y += n.p.y * m; v.z += n.p.z * m; }
+    v.multiplyScalar(1 / mw);
+    return v;
+  }
+
+  /* --- 重写 metaball 场并三角化 --- */
+  updateField() {
+    const c = this.center, mc = this.mc;
+    let maxE = 0;
+    for (const n of this.nodes) {
+      const d = Math.hypot(n.p.x - c.x, n.p.y - c.y, n.p.z - c.z) + n.r * this.death;
+      if (d > maxE) maxE = d;
+    }
+    this.S = Math.max(this.S0, maxE / MARGIN);
+    mc.position.copy(c);
+    mc.scale.setScalar(this.S);
+    mc.reset();
+    const inv = 1 / this.S;
+    for (const n of this.nodes) {
+      const bx = THREE.MathUtils.clamp((n.p.x - c.x) * inv * 0.5 + 0.5, 0.03, 0.97);
+      const by = THREE.MathUtils.clamp((n.p.y - c.y) * inv * 0.5 + 0.5, 0.03, 0.97);
+      const bz = THREE.MathUtils.clamp((n.p.z - c.z) * inv * 0.5 + 0.5, 0.03, 0.97);
+      const R = (n.r * this.death) * inv;
+      const strength = R * R * FIELD_K * 0.25;
+      if (strength > 1e-5) mc.addBall(bx, by, bz, strength, SUBTRACT);
+    }
+    mc.update();
+  }
+
+  /* --- 挤压目标（0..1） --- */
+  setSqueezeTarget(f) { this.squeezeT = f; }
+
+  /* --- 物理步进 --- */
+  step(h, k, damp, restit) {
+    if (this.squeeze !== this.squeezeT) {
+      const d = this.squeezeT - this.squeeze;
+      const nw = Math.abs(d) < 0.002 ? this.squeezeT : this.squeeze + d * 0.22;
+      this.squeeze = nw;
+      for (const c of this.cons) c.rest = c.rest0 + (c.restSq - c.rest0) * this.squeeze;
+    }
+    const g = -GRAV * h * h;
+    for (const n of this.nodes) {
+      if (n.pin) continue;
+      const vx = (n.p.x - n.pp.x) * damp, vy = (n.p.y - n.pp.y) * damp, vz = (n.p.z - n.pp.z) * damp;
+      n.pp.set(n.p.x, n.p.y, n.p.z);
+      n.p.x += vx; n.p.y += vy + g; n.p.z += vz;
+    }
+    for (let it = 0; it < ITER; it++) {
+      for (let ci = 0; ci < this.cons.length; ci++) {
+        const c = this.cons[ci], A = this.nodes[c.a], B = this.nodes[c.b];
+        const dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, dz = B.p.z - A.p.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < 1e-12) continue;
+        const d = Math.sqrt(d2);
+        const w = A.invMass + B.invMass;
+        if (w <= 0) continue;
+        const f = ((d - c.rest) / d) * k;
+        const ka = f * (A.invMass / w), kb = f * (B.invMass / w);
+        A.p.x += dx * ka; A.p.y += dy * ka; A.p.z += dz * ka;
+        B.p.x -= dx * kb; B.p.y -= dy * kb; B.p.z -= dz * kb;
+      }
+      this.solveTable(restit);
+    }
+    this.solveTable(restit);
+  }
+
+  solveTable(restit) {
+    for (const n of this.nodes) {
+      const r = n.r * this.death;
+      if (n.p.y < r) {
+        n.p.y = r;
+        let vx = n.p.x - n.pp.x, vy = n.p.y - n.pp.y, vz = n.p.z - n.pp.z;
+        if (vy < 0) vy = -vy * restit;
+        n.pp.x = n.p.x - vx * 0.985;
+        n.pp.y = n.p.y - vy;
+        n.pp.z = n.p.z - vz * 0.985;
+      }
+    }
+  }
+
+  /* 让被抓节点跟随目标点 */
+  applyPin() {
+    for (const n of this.nodes) {
+      if (!n.pin) continue;
+      n.pp.x = n.p.x - (n.tgt.x - n.p.x) * 0.35;
+      n.pp.y = n.p.y - (n.tgt.y - n.p.y) * 0.35;
+      n.pp.z = n.p.z - (n.tgt.z - n.p.z) * 0.35;
+      n.p.copy(n.tgt);
+    }
+  }
+
+  kinematics() {
+    let sp = 0, st = 1;
+    for (const n of this.nodes) {
+      const v = Math.hypot(n.p.x - n.pp.x, n.p.y - n.pp.y, n.p.z - n.pp.z) / H_STEP;
+      if (v > sp) sp = v;
+    }
+    for (const c of this.cons) {
+      const A = this.nodes[c.a], B = this.nodes[c.b];
+      const d = Math.hypot(B.p.x - A.p.x, B.p.y - A.p.y, B.p.z - A.p.z);
+      const rt = d / Math.max(1e-4, c.rest);
+      if (rt > st) st = rt;
+    }
+    return { sp, st };
+  }
+
+  dispose() { scene.remove(this.mc); this.mc.geometry.dispose(); }
+}
+
+/* =====================================================================
+   4. 世界
+   ===================================================================== */
+const bears = [];
+const _v = new THREE.Vector3();
+
+function spawnBear(flavor, x, z, fromY, vel) {
+  if (bears.length >= MAX_BEARS) retire(bears.find(b => !b.dead) || bears[0]);
+  const rot = Math.random() * Math.PI * 2;
+  const c = new THREE.Vector3(x, fromY, z);
+  const b = new Bear(flavor, c, rot, { vel, jx: 0.06, jz: 0.06 });
+  // 落点放在桌上：把整体下移，使最低节点贴桌
+  let yb = Infinity;
+  for (const n of b.nodes) yb = Math.min(yb, n.p.y - n.r);
+  for (const n of b.nodes) { n.p.y -= yb; n.pp.y -= yb; }
+  bears.push(b);
+  refreshUI();
+  return b;
+}
+
+function retire(b) {
+  if (!b || b.dead) return;
+  b.dead = true;
+  if (grab && grab.bear === b) releaseGrab(0);
+}
+
+let pourQueue = [];
+function pour(n) {
+  for (let i = 0; i < n; i++) {
+    const f = FLAVORS[(Math.random() * FLAVORS.length) | 0];
+    pourQueue.push({
+      f,
+      x: (Math.random() - 0.5) * 0.75,
+      z: (Math.random() - 0.5) * 0.72,
+      y: 0.95 + Math.random() * 0.75,
+      t: i * 0.11 + Math.random() * 0.05
+    });
+  }
+}
+let pourT = 0;
+function tickPour(dt) {
+  pourT += dt;
+  pourQueue = pourQueue.filter(q => {
+    if (q.t > pourT) return true;
+    spawnBear(q.f, q.x, q.z, q.y, { x: (Math.random() - .5) * .5, y: -0.5 - Math.random(), z: (Math.random() - .5) * .5 });
+    return false;
+  });
+}
+
+/* =====================================================================
+   5. 输入：抓取 / 拉伸 / 挤压 / 抛出
+   ===================================================================== */
+const dom = renderer.domElement;
+const curEl = document.getElementById('cur');
+let pointer = { x: innerWidth / 2, y: innerHeight / 2, ndc: new THREE.Vector2(), active: false };
+let grab = null;           // {bear, node, depth, p0, t0, vel}
+let squeezeKey = false;
+
+function rayFrom(x, y) { _v.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1, 0.5).unproject(camera).sub(camera.position).normalize(); return _v.clone(); }
+function pointAt(x, y, depth) { return camera.position.clone().add(rayFrom(x, y).multiplyScalar(depth)); }
+
+// 射线到节点的最近距离
+function pickBear(x, y) {
+  const o = camera.position, d = rayFrom(x, y);
+  let best = null, bestD = Infinity;
+  for (const b of bears) {
+    if (b.dead) continue;
+    for (const n of b.nodes) {
+      const vx = n.p.x - o.x, vy = n.p.y - o.y, vz = n.p.z - o.z;
+      const t = Math.max(0, vx * d.x + vy * d.y + vz * d.z);
+      const ex = vx - d.x * t, ey = vy - d.y * t, ez = vz - d.z * t;
+      // 视觉表面半径≈节点半径，但相邻球融合后会外扩，故留一点余量
+      const dist = Math.sqrt(ex * ex + ey * ey + ez * ez) - n.r * 0.85;
+      const depth = t;
+      if (dist < 0.070 && dist < bestD && depth > 0.15 && depth < 12) { bestD = dist; best = { bear: b, node: n, depth }; }
+    }
+  }
+  return best;
+}
+
+function beginGrab(p) {
+  const h = pickBear(p.x, p.y);
+  if (!h) return;
+  const t = pointAt(p.x, p.y, h.depth);
+  h.node.pin = true;
+  h.node.invMass = 0;               // 被抓节点视为无限重，物理约束不再扯动它
+  h.node.tgt = t.clone();
+  grab = { bear: h.bear, node: h.node, depth: h.depth, p0: t.clone(), n0: h.node.p.clone(), vel: new THREE.Vector3(), last: t.clone() };
+  h.bear.sleeping = false; h.bear.still = 0;
+  curEl.classList.add('grab');
+}
+
+function moveGrab(p, dt) {
+  if (!grab) return;
+  const t = pointAt(p.x, p.y, grab.depth);
+  const target = grab.n0.clone().add(t.sub(grab.p0));
+  grab.node.tgt.copy(target);
+  const inst = target.clone().sub(grab.last).divideScalar(Math.max(1e-3, dt));
+  grab.vel.lerp(inst, 0.35);
+  grab.last.copy(target);
+  grab.bear.sleeping = false; grab.bear.still = 0;
+}
+
+function releaseGrab(boost = 1) {
+  if (!grab) return;
+  const v = grab.vel.clone().clampLength(0, 6.5).multiplyScalar(boost);
+  grab.node.pin = false;
+  grab.node.invMass = grab.node.invMass0;
+  // 抛出的惯性
+  if (v.lengthSq() > 0.02) {
+    for (const n of grab.bear.nodes) { if (n.pin) continue; n.pp.x -= v.x * H_STEP * 0.95; n.pp.y -= v.y * H_STEP * 0.95; n.pp.z -= v.z * H_STEP * 0.95; }
+  }
+  grab.bear.sleeping = false; grab.bear.still = 0;
+  grab = null;
+  curEl.classList.remove('grab');
+  if (!squeezeKey) curEl.classList.remove('squeeze');
+}
+
+dom.addEventListener('pointerdown', (e) => {
+  dom.setPointerCapture?.(e.pointerId);
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  pointer.active = true;
+  if (e.button === 2) { squeezeKey = true; if (grab) curEl.classList.add('squeeze'); return; }
+  if (grab) return;
+  beginGrab(pointer);
+});
+dom.addEventListener('pointermove', (e) => {
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  pointer.ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  if (grab) moveGrab(pointer, 1 / 60);
+});
+function endPtr(e) {
+  if (e.button === 2) { squeezeKey = false; if (!grab) curEl.classList.remove('squeeze'); return; }
+  releaseGrab(1);
+}
+dom.addEventListener('pointerup', endPtr);
+dom.addEventListener('pointercancel', endPtr);
+dom.addEventListener('contextmenu', e => e.preventDefault());
+dom.addEventListener('pointerleave', () => { pointer.active = false; });
+
+addEventListener('keydown', e => { if (e.key === 'Shift') { squeezeKey = true; if (grab) curEl.classList.add('squeeze'); } });
+addEventListener('keyup',   e => { if (e.key === 'Shift') { squeezeKey = false; curEl.classList.remove('squeeze'); } });
+addEventListener('blur', () => { squeezeKey = false; releaseGrab(0); curEl.classList.remove('squeeze', 'grab'); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* =====================================================================
+   6. UI
+   ===================================================================== */
+const el = {
+  cnt: document.getElementById('cnt'),
+  sw: document.getElementById('sw'),
+  wob: document.getElementById('wob'),
+  wobV: document.getElementById('wobV'),
+  str: document.getElementById('sStr'),
+  bnc: document.getElementById('sBnc'),
+  pour: document.getElementById('pour'),
+  dbg: document.getElementById('dbg'),
+};
+let selFlavor = FLAVORS[3];
+FLAVORS.forEach((f, i) => {
+  const s = document.createElement('i');
+  s.style.background = '#' + new THREE.Color(f.c).getHexString();
+  s.style.color = '#' + new THREE.Color(f.c).getHexString();
+  s.title = f.name;
+  s.addEventListener('click', () => {
+    selFlavor = f;
+    [...el.sw.children].forEach((c, j) => c.classList.toggle('on', j === i));
+    spawnBear(f, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, 1.05, { x: 0, y: -0.35, z: 0 });
+  });
+  if (f === selFlavor) s.classList.add('on');
+  el.sw.appendChild(s);
+});
+el.wob.addEventListener('input', () => { wobble = +el.wob.value / 100; el.wobV.textContent = el.wob.value; });
+el.pour.addEventListener('click', () => { pourT = 0; pour(4); });
+function refreshUI() { el.cnt.textContent = String(bears.filter(b => !b.dead).length); }
+if (DEV) el.dbg.style.display = 'block';
+
+/* =====================================================================
+   7. 主循环
+   ===================================================================== */
+let acc = 0, last = performance.now();
+let physMs = 0, mcMs = 0, fps = 0, frames = 0, fpsT = 0, mcStride = 1, mcFrame = 0;
+let statT = 0, smoothStr = 1, smoothSpd = 0;
+let intro = 0;
+
+function tick(dt) {
+  acc += dt;
+  let n = 0;
+  while (acc >= H_STEP && n < 5) {
+    const t0 = performance.now();
+    const k = 0.88 - 0.68 * wobble;
+    const damp = 0.986 + 0.010 * wobble;
+    const restit = 0.06 + 0.40 * wobble;
+    const sq = (squeezeKey && grab) ? 1 : 0;
+    for (const b of bears) {
+      if (b.dead) continue;
+      if (grab && grab.bear === b) { b.sleeping = false; b.setSqueezeTarget(sq); }
+      else b.setSqueezeTarget(0);
+      if (b.squeeze !== b.squeezeT) b.sleeping = false;
+      if (!b.sleeping) b.step(H_STEP, k, damp, restit);
+      if (grab && grab.bear === b) b.applyPin();
+    }
+    // 熊与熊之间的碰撞（球近似）
+    for (let i = 0; i < bears.length; i++) {
+      const A = bears[i]; if (A.dead || A.sleeping) continue;
+      for (let j = i + 1; j < bears.length; j++) {
+        const B = bears[j]; if (B.dead) continue;
+        for (const a of A.nodes) {
+          for (const b of B.nodes) {
+            const dx = b.p.x - a.p.x, dy = b.p.y - a.p.y, dz = b.p.z - a.p.z;
+            const rr = (a.r + b.r) * A.death * B.death * 0.98;
+            const d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 > rr * rr || d2 < 1e-10) continue;
+            const d = Math.sqrt(d2), pen = (rr - d) / d;
+            const w = a.invMass + b.invMass;
+            const ka = pen * (a.invMass / w), kb = pen * (b.invMass / w);
+            a.p.x -= dx * ka; a.p.y -= dy * ka; a.p.z -= dz * ka;
+            b.p.x += dx * kb; b.p.y += dy * kb; b.p.z += dz * kb;
+            B.sleeping = false; B.still = 0;
+            if (pen * d > 0.045) { A.sleeping = false; A.still = 0; }
+          }
+        }
+      }
+    }
+    // 休眠判定 + 死亡淡出
+    for (const b of bears) {
+      if (b.dead) {
+        b.death = Math.max(0, b.death - H_STEP * 3.2);
+        if (b.death <= 0.02) { b.dispose(); }
+        continue;
+      }
+      const { sp, st } = b.kinematics();
+      b.peakSpeed = Math.max(b.peakSpeed * 0.94, sp);
+      b.peakStretch = Math.max(b.peakStretch * 0.985, st);
+      if (sp < 0.022 && Math.abs(b.squeeze - b.squeezeT) < 0.01 && !b.nodes.some(n => n.pin)) {
+        b.still += H_STEP;
+        if (b.still > 0.30) b.sleeping = true;
+      } else b.still = 0;
+    }
+    acc -= H_STEP; n++;
+    physMs = physMs * 0.9 + (performance.now() - t0) * 0.1;
+  }
+  if (acc > H_STEP * 5) acc = 0;
+
+  // 清理已消亡
+  for (let i = bears.length - 1; i >= 0; i--) if (bears[i].dead && bears[i].death <= 0.02) { bears.splice(i, 1); refreshUI(); }
+
+  // metaball 重建（仅活动熊）
+  const t1 = performance.now();
+  let needSquash = false;
+  // 自适应网格精度：负载高时隔帧重建，保持 60fps
+  if (mcMs > 26) mcStride = 2; else if (mcMs < 12) mcStride = 1;
+  mcFrame = (mcFrame + 1) % mcStride;
+  const doMC = (mcFrame === 0) || !mcStride;
+  for (const b of bears) {
+    const sq = (b.squeeze !== b.squeezeT);
+    if (b.mcDirty !== false) { b.squeezeT = b.squeeze; b.computeCenter(); b.updateField(); b.mcDirty = false; }
+    else if (doMC && (!b.sleeping || b.dead || sq)) {
+      b.computeCenter();
+      b.updateField();
+      b.mcDirty = false;
+    }
+  }
+  mcMs = mcMs * 0.9 + (performance.now() - t1) * 0.1;
+
+  // 相机：开场推进 + 轻微视差
+  intro = Math.min(1, intro + dt / 1.5);
+  const ease = 1 - Math.pow(1 - intro, 3);
+  const zoom = 1.34 - 0.34 * ease;
+  const px = (pointer.x / innerWidth - 0.5), py = (pointer.y / innerHeight - 0.5);
+  const camX = px * 0.10 * (1 - (grab ? 1 : 0) * 0.5);
+  camera.position.x += (CAM_HOME.x * zoom + camX - camera.position.x) * 0.08;
+  camera.position.y += (CAM_HOME.y * zoom - py * 0.08 - camera.position.y) * 0.08;
+  camera.position.z += (CAM_HOME.z * zoom - camera.position.z) * 0.08;
+  camera.lookAt(CAM_TGT.x + camX * 0.35, CAM_TGT.y, CAM_TGT.z);
+  key.target.position.set(0, 0.2, 0);
+
+  // 光标 & 悬停
+  curEl.style.left = pointer.x + 'px';
+  curEl.style.top = pointer.y + 'px';
+  if (!grab) curEl.classList.toggle('hover', !!pickBear(pointer.x, pointer.y));
+
+  // 读数
+  statT += dt;
+  let mxSt = 1, mxSp = 0;
+  for (const b of bears) { if (b.dead) continue; mxSt = Math.max(mxSt, b.kinematics().st); mxSp = Math.max(mxSp, b.peakSpeed); }
+  smoothStr += (mxSt - smoothStr) * Math.min(1, dt * 8);
+  smoothSpd += (mxSp - smoothSpd) * Math.min(1, dt * 8);
+  if (statT > 0.1) {
+    statT = 0;
+    el.str.textContent = Math.round(smoothStr * 100) + '%';
+    el.bnc.textContent = smoothSpd.toFixed(1);
+  }
+  if (DEV) {
+    fps = frames * 1000 / (performance.now() - fpsT || 1);
+    el.dbg.textContent = `${fps.toFixed(0)} fps  ${(1000 / (fps || 1)).toFixed(1)} ms\nphys ${physMs.toFixed(2)}  mc ${mcMs.toFixed(2)}\nbears ${bears.length}  calls ${renderer.info.render.calls}  tri ${(renderer.info.render.triangles / 1000).toFixed(1)}k`;
+  }
+  if (!window.__noRender) renderer.render(scene, camera);
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (window.__pause) { last = now; if (window.__testTick && !window.__timerDrive) window.__testTick(0); return; }
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  frames++; if (now - fpsT > 500) { fpsT = now; frames = 0; }
+  tickPour(dt);
+  tick(dt);
+  if (window.__testTick && !window.__timerDrive) window.__testTick(dt);
+  if (window.__oneShot) { window.__oneShot = false; window.__pause = true; }
+}
+window.__gummy = {
+  get bears() { return bears; }, pour, spawnBear,
+  get mem() { return { physMs, mcMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; },
+  get grabbing() { return !!grab; },
+  press(v) { squeezeKey = v; },
+  grabAt(x, y) { pointer.x = x; pointer.y = y; beginGrab(pointer); },
+  moveTo(x, y) { pointer.x = x; pointer.y = y; moveGrab(pointer, 1 / 60); },
+  free() { releaseGrab(1); },
+  nodeScreen(bi, ni) {
+    const b = bears.filter(x => !x.dead)[bi];
+    if (!b) return null;
+    const v = b.nodes[Math.min(ni, b.nodes.length - 1)].p.clone().project(camera);
+    return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight };
+  },
+};
+
+window.__phase = 'built';
+
+/* ---- 自测（?selftest=1）：用帧时钟驱动，兼容 headless 虚拟时间 ---- */
+const SELFTEST = new URLSearchParams(location.search).has('selftest');
+if (SELFTEST) {
+  const T = {};
+  const alive = () => bears.filter(b => !b.dead);
+  const proj = (b, i) => window.__gummy.nodeScreen(bears.indexOf(b), i);
+  const spanY = b => { let a = 1e9, c = -1e9; for (const n of b.nodes) { a = Math.min(a, n.p.y); c = Math.max(c, n.p.y); } return c - a; };
+  const spanX = b => { let a = 1e9, c = -1e9; for (const n of b.nodes) { a = Math.min(a, n.p.x); c = Math.max(c, n.p.x); } return c - a; };
+  let clock = 0, step = 0, bear = null, h0 = 0, pouredFrom = 0;
+  const plan = [
+    [1.30, () => {
+      const bs = alive(); let ymin = 1e9, ymax = -1e9, bad = 0, str = 1, spd = 0;
+      for (const b of bs) {
+        const k = b.kinematics(); str = Math.max(str, k.st); spd = Math.max(spd, k.sp);
+        for (const n of b.nodes) {
+          if (!isFinite(n.p.x + n.p.y + n.p.z)) bad++;
+          ymin = Math.min(ymin, n.p.y - n.r); ymax = Math.max(ymax, n.p.y + n.r);
+        }
+      }
+      T.settle = { n: bs.length, floor: +ymin.toFixed(3), top: +ymax.toFixed(3), nan: bad, stretch: +str.toFixed(2), speed: +spd.toFixed(2) };
+      bear = bs[bs.length - 1];
+    }],
+    [1.40, () => { const p = proj(bear, 2); window.__gummy.grabAt(p.x, p.y); T.grabbed = window.__gummy.grabbing; h0 = spanY(bear); }],
+    [1.50, () => { const p = proj(bear, 2); window.__gummy.moveTo(p.x, p.y - 190); }],
+    [1.80, () => { const p = proj(bear, 2); window.__gummy.moveTo(p.x, p.y - 250); }],
+    [2.30, () => {
+      const k = bear.kinematics();
+      T.stretch = { metric: +k.st.toFixed(2), hRatio: +(spanY(bear) / h0).toFixed(2) };
+      window.__gummy.free();
+    }],
+    [2.50, () => { T.throwSpeed = +bear.kinematics().sp.toFixed(2); }],
+    [3.60, () => { const k = bear.kinematics(); T.afterFall = { stretch: +k.st.toFixed(2), speed: +k.sp.toFixed(2), floor: +(Math.min(...bear.nodes.map(n => n.p.y - n.r))).toFixed(3) }; }],
+    [3.70, () => {
+      const p = proj(bear, 4); window.__gummy.grabAt(p.x, p.y);
+      T.pre = { h: +spanY(bear).toFixed(3), w: +spanX(bear).toFixed(3) };
+      window.__gummy.press(true);
+    }],
+    [4.90, () => {
+      T.squeeze = { h: +spanY(bear).toFixed(3), w: +spanX(bear).toFixed(3), phase: +bear.squeeze.toFixed(2) };
+      window.__gummy.press(false); window.__gummy.free();
+    }],
+    [5.00, () => { pouredFrom = alive().length; window.__gummy.pour(3); }],
+    [7.20, () => {
+      let bad = 0, ymin = 1e9, str = 1;
+      for (const b of alive()) {
+        str = Math.max(str, b.kinematics().st);
+        for (const n of b.nodes) { if (!isFinite(n.p.x + n.p.y + n.p.z)) bad++; ymin = Math.min(ymin, n.p.y - n.r); }
+      }
+      T.final = {
+        from: pouredFrom, n: alive().length, floor: +ymin.toFixed(3), nan: bad, stretch: +str.toFixed(2),
+        mem: window.__gummy.mem, frames,
+        ui: { cnt: el.cnt.textContent, str: el.str.textContent, bnc: el.bnc.textContent },
+        errs: (window.__errs || []).slice(0, 3),
+      };
+      window.__selftest = T;
+      document.title = 'SELFTEST ' + JSON.stringify(T);
+      const d = document.getElementById('dbg'); d.style.display = 'block'; d.style.zIndex = 99;
+      d.textContent = JSON.stringify(T, (k, v) => typeof v === 'number' ? +v.toFixed(3) : v, 1);
+      console.log('SELFTEST ' + JSON.stringify(T));
+    }],
+  ];
+  window.__testTick = (dt) => {
+    clock += dt;
+    if (!window.__simFrames) window.__simFrames = 0;
+    window.__simFrames++;
+    tickPour(dt);
+    tick(dt);
+    while (step < plan.length && plan[step][0] <= clock) { try { plan[step][1](); } catch (e) { (window.__errs = window.__errs || []).push('T:' + e.message); } step++; }
+  };
+  window.__timerDrive = true;
+  if (!new URLSearchParams(location.search).has('nodrive')) setInterval(() => window.__testTick(1 / 30), 30);
+}
+
+/* 开场：一把混色软糖熊落在桌上 */
+pour(6);
+if (!SELFTEST) requestAnimationFrame(frame);
+</script>
+</body>
+</html>
